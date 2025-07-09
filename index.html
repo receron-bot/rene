@@ -69,7 +69,7 @@
             <p class="text-gray-600 mb-6">Inicia tu viaje de aprendizaje basado en proyectos.</p>
             <div class="space-y-4">
                 <button id="create-project-btn" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors btn-disabled">
-                    <i class="fas fa-spinner fa-spin mr-2 hidden"></i>
+                    <i class="fas fa-spinner fa-spin mr-2"></i>
                     <span class="btn-text">Conectando...</span>
                 </button>
                 <div class="relative flex items-center">
@@ -177,6 +177,7 @@
         let currentUserId = null;
         let currentProjectId = null;
         let projectUnsubscribe = null;
+        let authTimeout = null;
 
         // --- UI Elements ---
         const loginScreen = document.getElementById('login-screen');
@@ -228,7 +229,18 @@
         };
 
         // --- Authentication ---
+        authTimeout = setTimeout(() => {
+            if (!currentUserId) { // Check if auth is still not complete
+                showAlert("La conexión está tardando demasiado. Por favor, revisa tu conexión a internet y recarga la página.");
+                const createBtnText = createProjectBtn.querySelector('.btn-text');
+                createBtnText.textContent = 'Error de Conexión';
+                createProjectBtn.querySelector('.fa-spinner').classList.add('hidden');
+            }
+        }, 10000); // 10 second timeout
+
         onAuthStateChanged(auth, async (user) => {
+            if (authTimeout) clearTimeout(authTimeout); // Clear the timeout if auth succeeds
+
             if (user) {
                 currentUserId = user.uid;
                 userIdDisplay.textContent = currentUserId;
@@ -469,11 +481,15 @@
         };
 
         // --- Event Listeners ---
-        createProjectBtn.addEventListener('click', () => openModal(createProjectModal));
+        createProjectBtn.addEventListener('click', () => {
+            if(createProjectBtn.classList.contains('btn-disabled')) return;
+            openModal(createProjectModal)
+        });
         document.getElementById('confirm-create-project-btn').addEventListener('click', handleCreateProject);
         document.getElementById('cancel-create-project-btn').addEventListener('click', () => closeModal(createProjectModal));
         
         joinProjectBtn.addEventListener('click', () => {
+            if(joinProjectBtn.classList.contains('btn-disabled-gray')) return;
             const projectId = joinProjectIdInput.value.trim();
             joinProject(projectId);
         });
