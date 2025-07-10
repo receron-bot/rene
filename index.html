@@ -7,25 +7,497 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Firebase Configuración -->
-    
-<script>
-  const __firebase_config = JSON.stringify({
-    apiKey: "TU_API_KEY",
-    authDomain: "TU_AUTH_DOMAIN",
-    projectId: "TU_PROJECT_ID",
-    storageBucket: "TU_STORAGE_BUCKET",
-    messagingSenderId: "TU_SENDER_ID",
-    appId: "TU_APP_ID"
-  });
-  const __app_id = "mi-juego-pbl";
-</script>
-
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+        }
+        .phase-card {
+            transition: all 0.3s ease;
+            transform-origin: center;
+        }
+        .phase-card.locked {
+            filter: grayscale(80%);
+            opacity: 0.6;
+        }
+        .phase-card:not(.locked):hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .modal-backdrop {
+            background-color: rgba(0,0,0,0.5);
+            transition: opacity 0.3s ease;
+        }
+        .modal-content-transform {
+            transition: transform 0.3s ease;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-dot.not-started { background-color: #9ca3af; }
+        .status-dot.in-progress { background-color: #f59e0b; }
+        .status-dot.completed { background-color: #10b981; }
+        .animate-pulse-fast {
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        /* Custom styles for disabled buttons */
+        .btn-disabled {
+            cursor: not-allowed;
+            background-color: #a5b4fc; /* Lighter indigo */
+        }
+        .btn-disabled-gray {
+             cursor: not-allowed;
+            background-color: #d1d5db; /* Lighter gray */
+        }
+    </style>
 </head>
 <body class="text-gray-800">
-<!-- El resto del contenido HTML comienza aquí... -->
-<!-- El código del usuario continuará debajo del <body> original -->
-<!-- Debido al tamaño, no se vuelve a incluir en este fragmento generado -->
-<!-- Se debe copiar todo el código restante desde el archivo original aquí -->
+
+    <div id="app" class="min-h-screen flex flex-col items-center justify-center p-4">
+
+        <!-- Splash/Login Screen -->
+        <div id="login-screen" class="w-full max-w-md bg-white p-8 rounded-2xl shadow-lg text-center">
+            <i class="fas fa-project-diagram fa-3x text-indigo-500 mb-4"></i>
+            <h1 class="text-3xl font-bold mb-2">Proyecto Aventura</h1>
+            <p class="text-gray-600 mb-6">Inicia tu viaje de aprendizaje basado en proyectos.</p>
+            <div class="space-y-4">
+                <button id="create-project-btn" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors btn-disabled">
+                    <i class="fas fa-spinner fa-spin mr-2"></i>
+                    <span class="btn-text">Conectando...</span>
+                </button>
+                <div class="relative flex items-center">
+                    <div class="flex-grow border-t border-gray-300"></div>
+                    <span class="flex-shrink mx-4 text-gray-500">o</span>
+                    <div class="flex-grow border-t border-gray-300"></div>
+                </div>
+                <div class="flex space-x-2">
+                    <input type="text" id="join-project-id" placeholder="Ingresa ID del Proyecto" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none" disabled>
+                    <button id="join-project-btn" class="bg-gray-700 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-800 transition-colors btn-disabled-gray">
+                        <i class="fas fa-sign-in-alt"></i>
+                    </button>
+                </div>
+            </div>
+             <p class="text-xs text-gray-400 mt-6">Tu UserID: <span id="user-id-display" class="font-mono">Cargando...</span></p>
+        </div>
+
+        <!-- Main Game Board -->
+        <div id="game-board" class="hidden w-full max-w-7xl mx-auto">
+            <header class="bg-white rounded-xl shadow-md p-4 mb-6 flex justify-between items-center flex-wrap gap-4">
+                <div>
+                    <h1 class="text-2xl font-bold text-indigo-800">Proyecto: <span id="project-name-display"></span></h1>
+                    <p class="text-sm text-gray-500 mt-1">ID para compartir: 
+                        <span id="project-id-display" class="font-mono bg-gray-100 p-1 rounded cursor-pointer" title="Copiar ID"></span>
+                        <i id="copy-icon" class="fas fa-copy text-gray-400 ml-1 cursor-pointer"></i>
+                    </p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div id="team-members" class="flex items-center -space-x-2">
+                        <!-- Team member avatars will be injected here -->
+                    </div>
+                    <button id="leave-project-btn" class="bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 transition-colors">
+                        <i class="fas fa-door-open mr-2"></i>Salir
+                    </button>
+                </div>
+            </header>
+
+            <div id="phases-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Phase cards will be injected here -->
+            </div>
+        </div>
+
+        <!-- Task Modal -->
+        <div id="task-modal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-8 m-4 modal-content-transform scale-95">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h2 id="modal-title" class="text-2xl font-bold mb-2"></h2>
+                        <p id="modal-description" class="text-gray-600 mb-6"></p>
+                    </div>
+                    <button id="close-task-modal-btn" class="text-gray-400 hover:text-gray-600 text-3xl leading-none">&times;</button>
+                </div>
+                <div id="modal-content" class="space-y-4">
+                    <!-- Dynamic content goes here -->
+                </div>
+                <div class="mt-8 flex justify-end space-x-3">
+                    <button id="save-task-btn" class="bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-indigo-700 transition-colors">Guardar y Completar</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Create Project Modal -->
+        <div id="create-project-modal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 m-4 modal-content-transform scale-95">
+                <h2 class="text-2xl font-bold mb-4">Crear Nuevo Proyecto</h2>
+                <p class="text-gray-600 mb-6">Dale un nombre increíble a tu nueva aventura de aprendizaje.</p>
+                <div>
+                    <label for="new-project-name" class="block text-sm font-medium text-gray-700">Nombre del Proyecto</label>
+                    <input type="text" id="new-project-name" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Ej: Innovadores Digitales">
+                </div>
+                <div class="mt-8 flex justify-end space-x-3">
+                    <button id="cancel-create-project-btn" class="bg-gray-200 text-gray-800 font-bold py-2 px-6 rounded-lg hover:bg-gray-300">Cancelar</button>
+                    <button id="confirm-create-project-btn" class="bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-indigo-700">Crear</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alert Modal -->
+        <div id="alert-modal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 m-4 text-center modal-content-transform scale-95">
+                <i id="alert-icon" class="fas fa-exclamation-circle text-yellow-500 fa-3x mb-4"></i>
+                <p id="alert-message" class="text-gray-700 text-lg"></p>
+                <button id="close-alert-btn" class="mt-6 bg-indigo-600 text-white font-bold py-2 px-8 rounded-lg hover:bg-indigo-700 w-full">Entendido</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module">
+        // Import Firebase modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Firebase Configuration ---
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-pbl-game';
+
+        // --- App Initialization ---
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // --- State Management ---
+        let currentUserId = null;
+        let currentProjectId = null;
+        let projectUnsubscribe = null;
+        let authTimeout = null;
+
+        // --- UI Elements ---
+        const loginScreen = document.getElementById('login-screen');
+        const gameBoard = document.getElementById('game-board');
+        const phasesContainer = document.getElementById('phases-container');
+        const createProjectBtn = document.getElementById('create-project-btn');
+        const joinProjectBtn = document.getElementById('join-project-btn');
+        const joinProjectIdInput = document.getElementById('join-project-id');
+        const userIdDisplay = document.getElementById('user-id-display');
+        
+        // Modals
+        const taskModal = document.getElementById('task-modal');
+        const createProjectModal = document.getElementById('create-project-modal');
+        const alertModal = document.getElementById('alert-modal');
+
+        // --- Project Structure Definition ---
+        const PHASES = {
+            '1_pregunta': { title: "Pregunta Guía", icon: "fas fa-question-circle", color: "bg-blue-500", description: "Define el problema central que guiará tu proyecto.", content: (data) => <label for="big-question" class="block text-sm font-medium text-gray-700">La Gran Pregunta</label><textarea id="big-question" rows="3" class="w-full p-2 border rounded-md" placeholder="¿Cómo podríamos...?">${data.bigQuestion || ''}</textarea><label for="justification" class="block text-sm font-medium text-gray-700 mt-4">Justificación</label><textarea id="justification" rows="4" class="w-full p-2 border rounded-md" placeholder="¿Por qué es importante resolver esta pregunta?">${data.justification || ''}</textarea>, getData: () => ({ bigQuestion: document.getElementById('big-question').value, justification: document.getElementById('justification').value, }) },
+            '2_investigacion': { title: "Investigación", icon: "fas fa-book-open", color: "bg-green-500", description: "Recopila información, recursos y datos relevantes.", content: (data) => <label for="research-summary" class="block text-sm font-medium text-gray-700">Resumen de la Investigación</label><textarea id="research-summary" rows="6" class="w-full p-2 border rounded-md" placeholder="Resume tus hallazgos clave aquí...">${data.summary || ''}</textarea>, getData: () => ({ summary: document.getElementById('research-summary').value }) },
+            '3_planificacion': { title: "Planificación", icon: "fas fa-tasks", color: "bg-yellow-500", description: "Organiza las tareas, roles y el cronograma del equipo.", content: (data) => <label for="project-plan" class="block text-sm font-medium text-gray-700">Plan del Proyecto</label><textarea id="project-plan" rows="6" class="w-full p-2 border rounded-md" placeholder="Define los pasos, responsables y fechas de entrega.">${data.plan || ''}</textarea>, getData: () => ({ plan: document.getElementById('project-plan').value }) },
+            '4_creacion': { title: "Creación", icon: "fas fa-paint-brush", color: "bg-purple-500", description: "Desarrolla tu producto, solución o prototipo.", content: (data) => <label for="creation-log" class="block text-sm font-medium text-gray-700">Bitácora de Creación</label><textarea id="creation-log" rows="6" class="w-full p-2 border rounded-md" placeholder="Documenta el proceso de desarrollo, los desafíos y los logros.">${data.log || ''}</textarea>, getData: () => ({ log: document.getElementById('creation-log').value }) },
+            '5_presentacion': { title: "Presentación", icon: "fas fa-bullhorn", color: "bg-red-500", description: "Prepara y comparte tus resultados con la audiencia.", content: (data) => <label for="presentation-outline" class="block text-sm font-medium text-gray-700">Esquema de la Presentación</label><textarea id="presentation-outline" rows="6" class="w-full p-2 border rounded-md" placeholder="Estructura tu presentación: introducción, desarrollo, conclusiones...">${data.outline || ''}</textarea>, getData: () => ({ outline: document.getElementById('presentation-outline').value }) },
+            '6_reflexion': { title: "Reflexión", icon: "fas fa-seedling", color: "bg-teal-500", description: "Evalúa el proceso, el resultado y los aprendizajes.", content: (data) => <label for="reflection-text" class="block text-sm font-medium text-gray-700">Nuestra Reflexión</label><textarea id="reflection-text" rows="6" class="w-full p-2 border rounded-md" placeholder="¿Qué funcionó bien? ¿Qué podríamos mejorar? ¿Qué aprendimos?">${data.reflection || ''}</textarea>, getData: () => ({ reflection: document.getElementById('reflection-text').value }) }
+        };
+
+        // --- Modal & Notification Functions ---
+        const showAlert = (message) => {
+            document.getElementById('alert-message').textContent = message;
+            alertModal.classList.remove('hidden');
+            alertModal.classList.add('flex');
+            setTimeout(() => alertModal.querySelector('.modal-content-transform').classList.remove('scale-95'), 10);
+        };
+        const closeAlertModal = () => {
+            alertModal.querySelector('.modal-content-transform').classList.add('scale-95');
+            setTimeout(() => alertModal.classList.add('hidden'), 200);
+        };
+
+        const openModal = (modalElement, setupFunction) => {
+            if (setupFunction) {
+                setupFunction();
+            }
+            modalElement.classList.remove('hidden');
+            modalElement.classList.add('flex');
+            setTimeout(() => modalElement.querySelector('.modal-content-transform').classList.remove('scale-95'), 10);
+        };
+        const closeModal = (modalElement) => {
+            modalElement.querySelector('.modal-content-transform').classList.add('scale-95');
+            setTimeout(() => modalElement.classList.add('hidden'), 200);
+        };
+
+        // --- Authentication ---
+        authTimeout = setTimeout(() => {
+            if (!currentUserId) { // Check if auth is still not complete
+                showAlert("La conexión está tardando demasiado. Por favor, revisa tu conexión a internet y recarga la página.");
+                const createBtnText = createProjectBtn.querySelector('.btn-text');
+                createBtnText.textContent = 'Error de Conexión';
+                createProjectBtn.querySelector('.fa-spinner').classList.add('hidden');
+            }
+        }, 10000); // 10 second timeout
+
+        onAuthStateChanged(auth, async (user) => {
+            if (authTimeout) clearTimeout(authTimeout); // Clear the timeout if auth succeeds
+
+            if (user) {
+                currentUserId = user.uid;
+                userIdDisplay.textContent = currentUserId;
+                // Enable UI
+                createProjectBtn.classList.remove('btn-disabled');
+                createProjectBtn.querySelector('.fa-spinner').classList.add('hidden');
+                createProjectBtn.querySelector('.btn-text').textContent = 'Crear Nuevo Proyecto';
+                joinProjectBtn.classList.remove('btn-disabled-gray');
+                joinProjectIdInput.disabled = false;
+                console.log("User authenticated with UID:", currentUserId);
+            } else {
+                console.log("No user signed in. Trying anonymous sign-in.");
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (error) {
+                    console.error("Anonymous sign-in failed:", error);
+                    showAlert("No se pudo conectar con el servidor. Por favor, recarga la página.");
+                }
+            }
+        });
+
+        // --- Core Functions ---
+        const handleCreateProject = async () => {
+            if (!currentUserId) {
+                showAlert("Aún conectando. Por favor, espera un momento.");
+                return;
+            }
+            const projectNameInput = document.getElementById('new-project-name');
+            const projectName = projectNameInput.value.trim();
+            if (!projectName) {
+                showAlert("Por favor, dale un nombre a tu proyecto.");
+                return;
+            }
+
+            const projectId = proj-${Math.random().toString(36).substr(2, 9)};
+            const projectRef = doc(db, artifacts/${appId}/public/data/projects, projectId);
+
+            const initialPhases = {};
+            Object.keys(PHASES).forEach((key, index) => {
+                initialPhases[key] = { status: index === 0 ? 'in-progress' : 'locked' };
+            });
+
+            const newProjectData = {
+                id: projectId, name: projectName, createdBy: currentUserId, createdAt: new Date(),
+                members: [currentUserId], phases: initialPhases,
+            };
+
+            try {
+                await setDoc(projectRef, newProjectData);
+                closeModal(createProjectModal);
+                projectNameInput.value = ''; // Clear input for next time
+                joinProject(projectId);
+            } catch (error) {
+                console.error("Error creating project:", error);
+                showAlert("No se pudo crear el proyecto. Inténtalo de nuevo.");
+            }
+        };
+
+        const joinProject = async (projectId) => {
+            if (!currentUserId) {
+                showAlert("Aún conectando. Por favor, espera un momento.");
+                return;
+            }
+            if (!projectId) {
+                showAlert("Por favor, ingresa un ID de proyecto.");
+                return;
+            }
+
+            const projectRef = doc(db, artifacts/${appId}/public/data/projects, projectId);
+            
+            try {
+                const projectSnap = await getDoc(projectRef);
+                if (!projectSnap.exists()) {
+                    showAlert("Proyecto no encontrado. Verifica el ID.");
+                    return;
+                }
+
+                await updateDoc(projectRef, { members: arrayUnion(currentUserId) });
+                currentProjectId = projectId;
+                
+                if (projectUnsubscribe) projectUnsubscribe();
+
+                projectUnsubscribe = onSnapshot(projectRef, (doc) => {
+                    if (doc.exists()) {
+                        renderGameBoard(doc.data());
+                    } else {
+                        console.log("El proyecto fue eliminado.");
+                        leaveProject();
+                    }
+                }, (error) => {
+                    console.error("Error listening to project:", error);
+                    showAlert("Se perdió la conexión con el proyecto.");
+                    leaveProject();
+                });
+
+                loginScreen.classList.add('hidden');
+                gameBoard.classList.remove('hidden');
+
+            } catch (error) {
+                console.error("Error joining project:", error);
+                showAlert("No se pudo unir al proyecto. Revisa el ID y tu conexión.");
+            }
+        };
+
+        const leaveProject = () => {
+            if (projectUnsubscribe) {
+                projectUnsubscribe();
+                projectUnsubscribe = null;
+            }
+            
+            if (currentProjectId && currentUserId) {
+                const projectRef = doc(db, artifacts/${appId}/public/data/projects, currentProjectId);
+                updateDoc(projectRef, { members: arrayRemove(currentUserId) })
+                    .catch(err => console.error("Error removing member:", err));
+            }
+
+            currentProjectId = null;
+            gameBoard.classList.add('hidden');
+            loginScreen.classList.remove('hidden');
+            phasesContainer.innerHTML = '';
+        };
+
+        const renderGameBoard = (projectData) => {
+            document.getElementById('project-name-display').textContent = projectData.name;
+            document.getElementById('project-id-display').textContent = projectData.id;
+            
+            renderTeam(projectData.members);
+
+            phasesContainer.innerHTML = '';
+            let isPreviousPhaseCompleted = true;
+
+            Object.keys(PHASES).forEach(phaseKey => {
+                const phaseConfig = PHASES[phaseKey];
+                const phaseData = projectData.phases[phaseKey] || {};
+                const isLocked = !isPreviousPhaseCompleted && phaseData.status !== 'completed';
+                
+                const card = document.createElement('div');
+                card.className = phase-card p-6 rounded-xl shadow-md ${phaseConfig.color} text-white ${isLocked ? 'locked' : 'cursor-pointer'};
+                card.dataset.phase = phaseKey;
+
+                let statusIndicator = '';
+                if (!isLocked) {
+                    if (phaseData.status === 'completed') statusIndicator = <div class="status-dot completed" title="Completado"></div>;
+                    else if (phaseData.status === 'in-progress') statusIndicator = <div class="status-dot in-progress animate-pulse-fast" title="En Progreso"></div>;
+                    else statusIndicator = <div class="status-dot not-started" title="No Iniciado"></div>;
+                }
+
+                card.innerHTML = <div class="flex justify-between items-center mb-4"><i class="${phaseConfig.icon} fa-2x"></i><div class="text-right">${statusIndicator}</div></div><h3 class="text-xl font-bold">${phaseConfig.title}</h3><p class="text-sm opacity-90 mt-1">${phaseConfig.description}</p>;
+
+                if (!isLocked) {
+                    card.addEventListener('click', () => openModal(taskModal, () => {
+                        document.getElementById('modal-title').textContent = phaseConfig.title;
+                        document.getElementById('modal-description').textContent = phaseConfig.description;
+                        document.getElementById('modal-content').innerHTML = phaseConfig.content(phaseData);
+                        document.getElementById('save-task-btn').onclick = () => saveTaskData(phaseKey);
+                    }));
+                }
+                
+                phasesContainer.appendChild(card);
+                if (phaseData.status !== 'completed') isPreviousPhaseCompleted = false;
+            });
+        };
+        
+        taskModal.addEventListener('click', (e) => {
+            if (e.target === taskModal) closeModal(taskModal);
+        });
+        createProjectModal.addEventListener('click', (e) => {
+            if (e.target === createProjectModal) closeModal(createProjectModal);
+        });
+        alertModal.addEventListener('click', (e) => {
+            if (e.target === alertModal) closeAlertModal();
+        });
+
+
+        const renderTeam = (members) => {
+            const teamContainer = document.getElementById('team-members');
+            teamContainer.innerHTML = '';
+            members.forEach(memberId => {
+                const avatar = document.createElement('div');
+                avatar.className = 'w-10 h-10 rounded-full flex items-center justify-center text-white font-bold border-2 border-white bg-cover bg-center';
+                avatar.style.backgroundColor = hsl(${memberId.charCodeAt(0) * 10 % 360}, 60%, 50%);
+                avatar.textContent = memberId.substring(0, 2).toUpperCase();
+                avatar.title = memberId;
+                teamContainer.appendChild(avatar);
+            });
+        };
+
+        const saveTaskData = async (phaseKey) => {
+            const phaseConfig = PHASES[phaseKey];
+            const dataToSave = phaseConfig.getData();
+
+            if (Object.values(dataToSave).some(val => !val || val.trim() === '')) {
+                showAlert("Por favor, completa todos los campos para finalizar esta fase.");
+                return;
+            }
+
+            const projectRef = doc(db, artifacts/${appId}/public/data/projects, currentProjectId);
+            const updates = {};
+            updates[phases.${phaseKey}.status] = 'completed';
+            for (const [key, value] of Object.entries(dataToSave)) {
+                updates[phases.${phaseKey}.${key}] = value;
+            }
+
+            const phaseKeys = Object.keys(PHASES);
+            const currentPhaseIndex = phaseKeys.indexOf(phaseKey);
+            if (currentPhaseIndex < phaseKeys.length - 1) {
+                const nextPhaseKey = phaseKeys[currentPhaseIndex + 1];
+                updates[phases.${nextPhaseKey}.status] = 'in-progress';
+            }
+
+            try {
+                await updateDoc(projectRef, updates);
+                closeModal(taskModal);
+            } catch (error) {
+                console.error("Error saving task:", error);
+                showAlert("No se pudieron guardar los cambios. Inténtalo de nuevo.");
+            }
+        };
+        
+        const copyProjectId = () => {
+            const projectId = document.getElementById('project-id-display').textContent;
+            navigator.clipboard.writeText(projectId).then(() => {
+                const icon = document.getElementById('copy-icon');
+                icon.classList.remove('fa-copy');
+                icon.classList.add('fa-check', 'text-green-500');
+                setTimeout(() => {
+                    icon.classList.remove('fa-check', 'text-green-500');
+                    icon.classList.add('fa-copy');
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+                showAlert("No se pudo copiar el ID.");
+            });
+        };
+
+        // --- Event Listeners ---
+        createProjectBtn.addEventListener('click', () => {
+            if(createProjectBtn.classList.contains('btn-disabled')) return;
+            openModal(createProjectModal)
+        });
+        document.getElementById('confirm-create-project-btn').addEventListener('click', handleCreateProject);
+        document.getElementById('cancel-create-project-btn').addEventListener('click', () => closeModal(createProjectModal));
+        
+        joinProjectBtn.addEventListener('click', () => {
+            if(joinProjectBtn.classList.contains('btn-disabled-gray')) return;
+            const projectId = joinProjectIdInput.value.trim();
+            joinProject(projectId);
+        });
+        document.getElementById('leave-project-btn').addEventListener('click', leaveProject);
+        document.getElementById('close-task-modal-btn').addEventListener('click', () => closeModal(taskModal));
+        document.getElementById('close-alert-btn').addEventListener('click', closeAlertModal);
+        document.getElementById('project-id-display').addEventListener('click', copyProjectId);
+        document.getElementById('copy-icon').addEventListener('click', copyProjectId);
+    </script>
 </body>
 </html>
